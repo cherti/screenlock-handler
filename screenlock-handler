@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+
+import os, sys, dbus, dbus.mainloop.glib, subprocess
+from systemd import login
+from gi.repository import GLib
+from multiprocessing import SimpleQueue
+
+def setup_signal(signal_handler, session_id):
+	print("attaching screenlock to session {}".format(session_id))
+	bus = dbus.SystemBus()
+	manager = bus.get_object("org.freedesktop.login1", "/org/freedesktop/login1")
+	manager = dbus.Interface(manager, "org.freedesktop.login1.Manager")
+	session_path = manager.GetSession(session_id)
+	session = bus.get_object("org.freedesktop.login1", session_path)
+	session.connect_to_signal("Lock", signal_handler)
+
+	inhibitor_fd = manager.Inhibit("sleep", "lock-handler", "Firing up screenlock before sleep", "delay").take()
+	inhibitors = SimpleQueue()
+	inhibitors.put(inhibitor_fd)
+
+	def sleep_handler(incoming):
+		if incoming:
+			print("{}: starting procedure".format(time.time()-startuptime))
+			signal_handler()
+			if not inhibitors.empty():
+				print("{}: closing inhibitor".format(time.time()-startuptime))
+				os.close(inhibitors.get())
+
+	def resume_handler(incoming):
+		if not incoming:
+			print("{}: putting inhibitor".format(time.time()-startuptime))
+			inhibitors.put(manager.Inhibit("sleep", "lock-handler", "Firing up screenlock before sleep", "delay").take())
+
+
+	manager.connect_to_signal("PrepareForSleep", sleep_handler)
+	manager.connect_to_signal("PrepareForSleep", resume_handler)
+
+def handler_dbus_freedesktop_screensaver(session_id):
+	print("locking session {} via dbus".format(session_id))
+	bus = dbus.SessionBus()
+	screensaver = bus.get_object("org.freedesktop.ScreenSaver", "/ScreenSaver")
+	screensaver.Lock()
+
+def handler_external(session_id, lock_cmd):
+	print("locking session {} using {}".format(session_id, lock_cmd[0]))
+	subprocess.call(lock_cmd)
+
+
+def main():
+	lock_cmd = sys.argv[1:]
+
+	dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+	if lock_cmd:
+		handler = lambda sid: lambda: handler_external(sid, lock_cmd)
+	else:
+		handler = lambda sid: lambda: handler_dbus_freedesktop_screensaver(sid)
+
+
+	# lock current session (if available via XDG_SESSION_ID) or all currently existing sessions
+	if os.environ.get("XDG_SESSION_ID"):
+		# we're likely inside a session
+		session_id = os.environ.get("XDG_SESSION_ID")
+		setup_signal(handler(session_id), session_id)
+	else:
+		# we're likely outside a session (e.g. a systemd-user-unit), just lock all available sessions
+		for session_id in login.sessions():
+			setup_signal(handler(session_id), session_id)
+
+	try:
+		loop = GLib.MainLoop().run()
+	except KeyboardInterrupt:
+		sys.exit(0)
+		loop.quit()
+
+main()
