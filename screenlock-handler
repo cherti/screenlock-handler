@@ -40,8 +40,11 @@ def setup_signal(signal_handler, session_id, session_path=None):
 def handler_dbus_freedesktop_screensaver(session_id):
 	print("locking session {} via dbus".format(session_id))
 	bus = dbus.SessionBus()
-	screensaver = bus.get_object("org.freedesktop.ScreenSaver", "/ScreenSaver")
-	screensaver.Lock()
+	try:
+		screensaver = bus.get_object("org.freedesktop.ScreenSaver", "/ScreenSaver")
+		screensaver.Lock()
+	except org.freedesktop.DBus.Error.ServiceUnknown:
+		print("No DBus-screensaver found, session {} cannot be locked.".format(session_id))
 
 def handler_external(session_id, lock_cmd):
 	print("locking session {} using {}".format(session_id, lock_cmd[0]))
@@ -55,6 +58,11 @@ def main():
 	if lock_cmd:
 		handler = lambda sid: lambda: handler_external(sid, lock_cmd)
 	else:
+		try:
+			dbus.SystemBus().get_object("org.freedesktop.ScreenSaver", "/ScreenSaver")
+		except org.freedesktop.DBus.Error.ServiceUnknown:
+			print("WARNING: No screensaver object provided anywhere via DBus. If this stays that way when screenlock is triggered, the screen will *NOT* be locked.", file=sys.stderr)
+
 		handler = lambda sid: lambda: handler_dbus_freedesktop_screensaver(sid)
 
 
