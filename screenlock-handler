@@ -8,6 +8,7 @@ from multiprocessing import SimpleQueue
 def setup_signal(signal_handler, session_id, session_path=None):
 	print("attaching screenlock to session {}".format(session_id))
 	bus = dbus.SystemBus()
+
 	if not session_path:
 		manager = bus.get_object("org.freedesktop.login1", "/org/freedesktop/login1")
 		manager = dbus.Interface(manager, "org.freedesktop.login1.Manager")
@@ -28,6 +29,7 @@ def setup_signal(signal_handler, session_id, session_path=None):
 				print("{}: closing inhibitor".format(time.time()-startuptime))
 				os.close(inhibitors.get())
 
+
 	def resume_handler(incoming):
 		if not incoming:
 			print("{}: putting inhibitor".format(time.time()-startuptime))
@@ -39,9 +41,8 @@ def setup_signal(signal_handler, session_id, session_path=None):
 
 def handler_dbus_freedesktop_screensaver(session_id):
 	print("locking session {} via dbus".format(session_id))
-	bus = dbus.SessionBus()
 	try:
-		screensaver = bus.get_object("org.freedesktop.ScreenSaver", "/ScreenSaver")
+		screensaver = dbus.SessionBus().get_object("org.freedesktop.ScreenSaver", "/ScreenSaver")
 		screensaver.Lock()
 	except org.freedesktop.DBus.Error.ServiceUnknown:
 		print("No DBus-screensaver found, session {} cannot be locked.".format(session_id))
@@ -51,45 +52,39 @@ def handler_external(session_id, lock_cmd):
 	subprocess.call(lock_cmd)
 
 
-def main():
-	lock_cmd = sys.argv[1:]
+lock_cmd = sys.argv[1:]
 
-	dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
-	if lock_cmd:
-		handler = lambda sid: lambda: handler_external(sid, lock_cmd)
-	else:
-		try:
-			dbus.SystemBus().get_object("org.freedesktop.ScreenSaver", "/ScreenSaver")
-		except org.freedesktop.DBus.Error.ServiceUnknown:
-			print("WARNING: No screensaver object provided anywhere via DBus. If this stays that way when screenlock is triggered, the screen will *NOT* be locked.", file=sys.stderr)
-
-		handler = lambda sid: lambda: handler_dbus_freedesktop_screensaver(sid)
-
-
-	# lock current session (if available via XDG_SESSION_ID) or all currently existing sessions
-	if os.environ.get("XDG_SESSION_ID"):
-		# we're likely inside a session
-		session_id = os.environ.get("XDG_SESSION_ID")
-		setup_signal(handler(session_id), session_id)
-	else:
-		# we're likely outside a session (e.g. a systemd-user-unit), just lock all available sessions
-		for session_id in login.sessions():
-			setup_signal(handler(session_id), session_id)
-
-		# attach screenlock handler to all sessions that might still be created in the future
-		def attach_screenlock_to_new_session(session_id, object_path):
-			setup_signal(handler(session_id), session_id, session_path=object_path)
-
-		dbus.SystemBus().add_signal_receiver(attach_screenlock_to_new_session,
-							bus_name="org.freedesktop.login1",
-							dbus_interface="org.freedesktop.login1.Manager",
-							signal_name="SessionNew",
-							path_keyword="path")
-
+dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+if lock_cmd:
+	handler = lambda sid: lambda: handler_external(sid, lock_cmd)
+else:
 	try:
-		loop = GLib.MainLoop().run()
-	except KeyboardInterrupt:
-		sys.exit(0)
-		loop.quit()
+		dbus.SystemBus().get_object("org.freedesktop.ScreenSaver", "/ScreenSaver")
+	except org.freedesktop.DBus.Error.ServiceUnknown:
+		print("WARNING: No screensaver object provided anywhere via DBus. If this stays that way when screenlock is triggered, the screen will *NOT* be locked.", file=sys.stderr)
 
-main()
+	handler = lambda sid: lambda: handler_dbus_freedesktop_screensaver(sid)
+
+
+# lock current session (if available via XDG_SESSION_ID) or all currently existing sessions
+if os.environ.get("XDG_SESSION_ID"):
+	# we're likely inside a session
+	session_id = os.environ.get("XDG_SESSION_ID")
+	setup_signal(handler(session_id), session_id)
+else:
+	# we're likely outside a session (e.g. a systemd-user-unit), just lock all available sessions
+	for session_id in login.sessions():
+		setup_signal(handler(session_id), session_id)
+
+	# attach screenlock handler to all sessions that might still be created in the future
+	def attach_screenlock_to_new_session(session_id, object_path):
+		setup_signal(handler(session_id), session_id, session_path=object_path)
+
+	dbus.SystemBus().add_signal_receiver(attach_screenlock_to_new_session,
+						bus_name="org.freedesktop.login1",
+						dbus_interface="org.freedesktop.login1.Manager",
+						signal_name="SessionNew",
+						path_keyword="path")
+
+
+loop = GLib.MainLoop().run()
