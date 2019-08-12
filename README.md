@@ -12,6 +12,7 @@ It will trigger both on lock-signals as well as locking the system on suspend.
 
 If run inside a session (e.g. via `screenlock-handler &` in your window manager config, shell-profile-files or similar), `screenlock-handler` will lock this specific session, whereas when run outside of a session (e.g. via a systemd-user-unit) it will lock all sessions, including those created after it was started.
 
+You can then run `loginctl lock-session` (or `loginctl lock-sessions`, if you want them all and have sufficient privileges) anywhere from your system and your session will get locked.
 
 ## Requirements
 
