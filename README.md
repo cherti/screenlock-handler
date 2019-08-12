@@ -39,7 +39,7 @@ To do so, create a file `~/.config/systemd/user/screenlock-handler.service` cont
 
 and make sure to start it once the graphical environement is available (as we need to pass the `DISPLAY`-variable to the environement such that it is inherited by our screenlock-handler and the screenlocker in the process, which is not particularly beautiful, admittedly, but it works and allows running inside of a systemd-user unit with a `Restart=always` directive).
 
-Now ensure that you start this unit, either by starting `systemctl --user start screenlock-handler.service` or by adding an appropriate install-section to the unit and enabling it.
+Now ensure that you start this unit, either by starting `systemctl --user start screenlock-handler.service` somewhere persistent or by adding an appropriate install-section to the unit and enabling it.
 
 
 ## Credit
