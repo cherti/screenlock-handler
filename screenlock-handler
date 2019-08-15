@@ -23,16 +23,13 @@ def setup_signal(signal_handler, session_id, session_path=None):
 
 	def sleep_handler(incoming):
 		if incoming:
-			print("{}: starting procedure".format(time.time()-startuptime))
 			signal_handler()
 			if not inhibitors.empty():
-				print("{}: closing inhibitor".format(time.time()-startuptime))
 				os.close(inhibitors.get())
 
 
 	def resume_handler(incoming):
 		if not incoming:
-			print("{}: putting inhibitor".format(time.time()-startuptime))
 			inhibitors.put(manager.Inhibit("sleep", "lock-handler", "Firing up screenlock before sleep", "delay").take())
 
 
