@@ -1,0 +1,6 @@
+[Unit]
+Description='Lock screen'
+
+[Service]
+Restart=always
+ExecStart=/usr/local/bin/screenlock-handler

@@ -33,7 +33,6 @@ To do so, create a file `~/.config/systemd/user/screenlock-handler.service` cont
     Description='Lock screen'
 
     [Service]
-    Environment=DISPLAY=:0
 	Restart=always
     ExecStart=/path/to/screenlock-handler [screenlock-command]
 
